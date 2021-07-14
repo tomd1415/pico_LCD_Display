@@ -3,19 +3,7 @@
 #include "pico/stdlib.h"
 #include "hardware/gpio.h"
 #include "pico/binary_info.h"
-/*
-const uint E_PIN = 2;
-const uint RS_PIN = 0;
-const uint RW_PIN = 1;
-const uint DB7_PIN = 10;
-const uint DB6_PIN = 9;
-const uint DB5_PIN = 8;
-const uint DB4_PIN = 7;
-const uint DB3_PIN = 6;
-const uint DB2_PIN = 5;
-const uint DB1_PIN = 4;
-const uint DB0_PIN = 3;
-*/
+
 struct lcd_display {
 	uint e_pin;
 	uint rs_pin;
@@ -145,6 +133,7 @@ void wait_for_busy_flag(struct lcd_display display)
 		gpio_put(display.db_pins[i], start_state_DB[i]);
 	}
 }
+
 void jump_to_line_2(struct lcd_display display)
 {
     	jump_to_pos(display, 40);

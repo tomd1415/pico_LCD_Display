@@ -5,7 +5,7 @@
 #include "pico/binary_info.h"
 
 struct lcd_display {
-	//if rw_pin is connected to ground set rw_pin > 40
+	//if rw_pin is connected to ground set rw_pin to 'N'
 	char rs_pin;
 	char rw_pin;
 	char e_pin;
@@ -28,6 +28,7 @@ void lcd_set_pins(struct lcd_display display, uint rs, uint rw, char pin_state)
 // rs - register select pin
 // rw - read/write pin
 {
+	// check to see if the RW pin is connected. If not connected cannot check for bust state fo wait for 50 microseconds (37 recomended by datasheet)
 	if (display.rw_pin <= 30)
 		lcd_wait_for_busy_flag(display);
 	else
@@ -52,6 +53,7 @@ void lcd_set_pins(struct lcd_display display, uint rs, uint rw, char pin_state)
 
 
 void lcd_init_display(struct lcd_display display)
+/* Sets up the display as per the Datasheet */
 {
 	// Page 45 of HD44780 Datasheet as reference for following 8 bit initialization
 	sleep_ms(45);
@@ -78,11 +80,13 @@ void lcd_init_display(struct lcd_display display)
 }
 
 void lcd_init_pins(struct lcd_display display)
+/* initilise the GPIO pins on the pico being used with the LCD Display and set them to output */
 {
 	gpio_init(display.e_pin);
 	gpio_set_dir(display.e_pin, GPIO_OUT);
 	gpio_init(display.rs_pin);
 	gpio_set_dir(display.rs_pin, GPIO_OUT);
+	// only set up the RW pin if it is connected
 	if (display.rw_pin <= 30) {
 		gpio_init(display.rw_pin);
 		gpio_set_dir(display.rw_pin, GPIO_OUT);
@@ -96,6 +100,7 @@ void lcd_init_pins(struct lcd_display display)
 }
 
 void lcd_display_msg(struct lcd_display display, char *message)
+/* Display a message to the LCD Display */
 {
 	for (int byte_idx = 0; byte_idx < strlen(message); byte_idx++) {
 		char d_byte = message[byte_idx];
@@ -105,11 +110,13 @@ void lcd_display_msg(struct lcd_display display, char *message)
 }
 
 void lcd_wait_for_busy_flag(struct lcd_display display)
-// Waits for the LCD's busy flag to clear.
+/* Waits for the LCD's busy flag to clear.
+   ONLY USE if RW pin connected to pico
+*/
 
 {
 	//get the current state of the pins to return to once busy flag if off
-	uint start_state_DB[8];
+	char start_state_DB[8];
 	bool start_state_RS;
 	bool start_state_RW;
 
@@ -139,6 +146,7 @@ void lcd_wait_for_busy_flag(struct lcd_display display)
 	
 	
 	}
+	// Set DB pins back to output
 	gpio_set_dir(display.db_pins[0], GPIO_OUT);
 
 	// Reset the pins to their orgional state
@@ -150,15 +158,20 @@ void lcd_wait_for_busy_flag(struct lcd_display display)
 }
 
 void lcd_jump_to_line_2(struct lcd_display display)
+/* Simply jump the cursor to the start of line 2 ready to display a message there */
 {
     	lcd_jump_to_pos(display, 40);
 }
 
-void lcd_jump_to_pos(struct lcd_display display, uint pos) {
+void lcd_jump_to_pos(struct lcd_display display, uint pos) 
+/* jump the cursor to the positon in DDRAM as specified by pos */
+{
 	lcd_set_pins(display, 0,0, (0x80 + pos));
 }
 
-void lcd_set_cursor(struct lcd_display display, bool cursor) {
+void lcd_set_cursor(struct lcd_display display, bool cursor)
+/* set the cursor on (true) or off (false) */
+{
 //cursor = true --> cursor on
 //cursor = false --> cursor off
 	if (cursor)

@@ -5,7 +5,7 @@ This will be a header file that can be used to run the HD44780U (LCD-II) based L
 
 The lcd_display struct holds the number of the GPIO pin that is connected to each of the LCD Display's pins.
 
-<b>NOTE:</b> <ul><li>If RW is set to 'n' the functions will operate without checking the 'busy flag'. All read functions will be disabled.</li><li>If any data pin in arrray position 4 - 7 (DB0 - DB3) is set to 'n' the functions will operate in '4-bit mode'.</li><ul>
+<b>NOTE:</b> <ul><li>If RW is set to 'n' the functions will operate without checking the 'busy flag'. All read functions will be disabled.</li><li>If any data pin in array position 4 - 7 (DB0 - DB3) is set to 'n' the functions will operate in '4-bit mode'.</li><ul>
 
 <h3>LCD pin numbers assumed:</h3>
     <b>1</b> - GND : Tied to ground -- not included in lcd_display struct.<br />

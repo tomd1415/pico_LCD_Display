@@ -6,10 +6,10 @@
 
 struct lcd_display {
 	//if rw_pin is connected to ground set rw_pin > 40
-	uint e_pin;
-	uint rs_pin;
-	uint rw_pin;
-	uint db_pins[8];
+	char rs_pin;
+	char rw_pin;
+	char e_pin;
+	char db_pins[8];
 };
 
 void lcd_set_pins(struct lcd_display display, uint rs, uint rw, char pin_state);

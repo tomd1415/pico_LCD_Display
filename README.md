@@ -11,9 +11,9 @@ The lcd_display struct holds the number of the GPIO pin that is connected to eac
     <b>1</b> - GND : Tied to ground -- not included in lcd_display struct.<br />
     <b>2</b> - VDD : Tied to 5v -- not included in lcd_display struct.<br />
     <b>3</b> - VO  : for brigtness control -- not included in lcd_display.<br />
-    <b>4</b> - RS  : Register Select -- Required - type: char -- supply GPIO pin number this is connected to RS pin on LCD Display.<br />
-    <b>5</b> - RW  : Read/Write Select -- Required - type: char -- supply GPIO pin number this is connected to the RW pin on the LCD Display. <i>Set to 'n' if the pin is not connected to the pico.</i><br />
-    <b>6</b> - E   : Enable Pin -- Required - type char -- supply GPIO pin number this is connected to E pin on the LCD Display.<br />
+    <b>4</b> - RS  : Register Select -- Required - type: char -- supply GPIO pin number that is connected to RS pin on LCD Display.<br />
+    <b>5</b> - RW  : Read/Write Select -- Required - type: char -- supply GPIO pin number that is connected to the RW pin on the LCD Display. <i>Set to 'n' if the pin is not connected to the pico.</i><br />
+    <b>6</b> - E   : Enable Pin -- Required - type char -- supply GPIO pin number that is connected to E pin on the LCD Display.<br />
     <b>7 to 14</b> - DB  : Data Pins -- Required - type: array of 8 char -- supply GPIO pins that are connected to the LCD Display in an array from the DB7 pin to the DB0 pin. If any pins in array positions 4, 5, 6 or 7 are equal to 'n' (or anything equlivant to an integer > 30) the functions will opperate in '4 bit mode' using just the data pind DB7, DB6, DB5 and DB4 meaning that DB0 - DB3 do not need to be connected to the pico.<br />
     <b>15</b> - BL1 : Back light 5v -- Not included in lcd_display struct.<br />
     <b>16</b> - BL2 : Back light GND -- Not included in lcd_display struct.<br />

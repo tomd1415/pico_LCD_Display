@@ -5,7 +5,8 @@
 #include "pico/binary_info.h"
 
 struct lcd_display {
-	//if rw_pin is connected to ground set rw_pin to 'N'
+	//if rw_pin is connected to ground set rw_pin to 'n' (or anything equlivant to an integer > 30)
+	//if any of the db_pins in array positions greater than 4 are set to 'n' (or anything equlivant to an integer > 30) the functions will opperate with only 4 DB connections
 	char rs_pin;
 	char rw_pin;
 	char e_pin;
@@ -13,6 +14,7 @@ struct lcd_display {
 };
 
 void lcd_set_pins(struct lcd_display display, char rs, char rw, char pin_state);
+void lcd_set_pins_4_only(struct lcd_display display, char rs, char rw, char pin_state);
 void lcd_init_display(struct lcd_display display);
 void lcd_init_pins(struct lcd_display display);
 void lcd_wait_for_busy_flag(struct lcd_display display);
@@ -44,21 +46,22 @@ void lcd_set_pins(struct lcd_display display, char rs, char rw, char pin_state)
 	if ((display.db_pins[4] > 30) || (display.db_pins[5] > 30) || (display.db_pins[6] > 30) || (display.db_pins[7] > 30))
 	{
 		//set the first 4 bits
-		for (int bit_idx = 0; bit_idx < 4; bit_idx++){
-			gpio_put(display.db_pins[bit_idx],  pin_state & (0x80 >> bit_idx));
+		for (int bit_idx = 0; bit_idx < 8; bit_idx++){
+			if (bit_idx < 4)
+				gpio_put(display.db_pins[bit_idx],  pin_state & (0x80 >> bit_idx));
+			else {
+				if (bit_idx == 4) {
+					sleep_us(1);
+					gpio_put(display.e_pin,1);
+					sleep_us(1);
+					gpio_put(display.e_pin,0);
+					sleep_us(1);
+				}
+				gpio_put(display.db_pins[bit_idx-4],  pin_state & (0x80 >> bit_idx));
+			}
 		
 		}
 
-		sleep_us(1);
-		gpio_put(display.e_pin,1);
-		sleep_us(1);
-		gpio_put(display.e_pin,0);
-		
-		//set the second 4 bits
-		for (int bit_idx = 4; bit_idx < 8; bit_idx++){
-			gpio_put(display.db_pins[bit_idx-4],  pin_state & (0x80 >> bit_idx));
-		
-		}
 	} else {
 
 		for (int bit_idx = 0; bit_idx < 8; bit_idx++){

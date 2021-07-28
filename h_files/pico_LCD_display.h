@@ -23,6 +23,8 @@ void lcd_jump_to_line_2(struct lcd_display display);
 void lcd_jump_to_pos(struct lcd_display display, uint pos);
 void lcd_set_cursor(struct lcd_display display, bool cursor);
 
+void lcd_delete_char(struct lcd_display display);
+void lcd_move_one_space(struct lcd_display display, bool direction);
 
 void lcd_set_pins(struct lcd_display display, char rs, char rw, char pin_state)
 // set the pins for the LCD Display
@@ -267,4 +269,22 @@ void lcd_set_cursor(struct lcd_display display, bool cursor)
 		lcd_set_pins(display, 0, 0, 0x0e);
 	else
 		lcd_set_pins(display, 0, 0, 0x0c);
+}
+
+
+void lcd_delete_char(struct lcd_display display)
+/* Replace the current character with a space */
+{
+	lcd_move_one_space(display, false);
+	lcd_set_pins(display, 1, 0, ' ');	
+	lcd_move_one_space(display, false);
+}
+
+void lcd_move_one_space(struct lcd_display display, bool direction)
+/* Move cursor one place to the left (0) or right (1) */
+{
+	if (direction)
+		lcd_set_pins(display, 0, 0, 0x18);
+	else
+		lcd_set_pins(display, 0, 0, 0x1c);
 }

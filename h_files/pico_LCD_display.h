@@ -13,7 +13,7 @@ struct lcd_display {
 	char db_pins[8];
 };
 
-void lcd_set_pins(struct lcd_display display, char rs, char rw, char pin_state);
+char lcd_set_pins(struct lcd_display display, char rs, char rw, char pin_state);
 void lcd_set_pins_4_only(struct lcd_display display, char rs, char rw, char pin_state);
 void lcd_init_display(struct lcd_display display);
 void lcd_init_pins(struct lcd_display display);
@@ -26,12 +26,14 @@ void lcd_set_cursor(struct lcd_display display, bool cursor);
 void lcd_delete_char(struct lcd_display display);
 void lcd_move_one_space(struct lcd_display display, bool direction);
 
-void lcd_set_pins(struct lcd_display display, char rs, char rw, char pin_state)
+char lcd_set_pins(struct lcd_display display, char rs, char rw, char pin_state)
 // set the pins for the LCD Display
 // char pin_state is a byte to hold the D7 to D0 pins
 // rs - register select pin
 // rw - read/write pin
 {
+	char ddram_data = 0x00;
+	
 	// check to see if the RW pin is connected. If not connected cannot check for bust state fo wait for 50 microseconds (37 recomended by datasheet)
 	if (display.rw_pin <= 30)
 		lcd_wait_for_busy_flag(display);
@@ -69,12 +71,35 @@ void lcd_set_pins(struct lcd_display display, char rs, char rw, char pin_state)
 		for (int bit_idx = 0; bit_idx < 8; bit_idx++){
 			gpio_put(display.db_pins[bit_idx],  pin_state & (0x80 >> bit_idx));
 			
-		}
+			}
 	}
 	sleep_us(1);
 	gpio_put(display.e_pin,1);
+	
+		
+		if ((rw == 1) && (display.rw_pin <= 30)) {
+
+			for (i=0; i<8; i++){
+				gpio_set_dir(display.db_pins[i], GPIO_IN);
+			}
+			
+			for (i=0; i<8; i++){
+				ddram_data = ddram_data | ((gpio_get(display.db_pins[i])<<i));
+			}
+			
+			for (i=0; i<8; i++){
+				gpio_set_dir(display.db_pins[i], GPIO_OUT);
+			}
+		}
+
 	sleep_us(1);
 	gpio_put(display.e_pin,0);
+	
+	if ((rw == 1) && (display.rw_pin <= 30)) {
+		return ddram_data;
+	} else {
+		return 0x00;
+	}
 	
 }
 
@@ -90,8 +115,7 @@ void lcd_set_pins_4_only(struct lcd_display display, char rs, char rw, char pin_
 		gpio_put(display.rw_pin, rw);
 	
 	for (int bit_idx = 0; bit_idx < 4; bit_idx++){
-		gpio_put(display.db_pins[bit_idx],  pin_state & (0x80 >> bit_idx));
-		
+		gpio_put(display.db_pins[bit_idx],  pin_state & (0x80 >> bit_idx));	
 	}
 	sleep_us(1);
 	gpio_put(display.e_pin,1);
@@ -287,4 +311,10 @@ void lcd_move_one_space(struct lcd_display display, bool direction)
 		lcd_set_pins(display, 0, 0, 0x14);
 	else
 		lcd_set_pins(display, 0, 0, 0x10);
+}
+
+char lcd_read_current_pos(struct lcd_display display)
+/* Read the character at the current location */
+{
+	lcd_set_pins(display, 1, 1, 0x00);
 }

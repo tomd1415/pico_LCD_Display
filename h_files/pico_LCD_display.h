@@ -284,7 +284,7 @@ void lcd_move_one_space(struct lcd_display display, bool direction)
 /* Move cursor one place to the left (0) or right (1) */
 {
 	if (direction)
-		lcd_set_pins(display, 0, 0, 0x18);
+		lcd_set_pins(display, 0, 0, 0x14);
 	else
-		lcd_set_pins(display, 0, 0, 0x1c);
+		lcd_set_pins(display, 0, 0, 0x10);
 }

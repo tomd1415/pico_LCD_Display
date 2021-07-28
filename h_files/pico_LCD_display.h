@@ -25,6 +25,7 @@ void lcd_set_cursor(struct lcd_display display, bool cursor);
 
 void lcd_delete_char(struct lcd_display display);
 void lcd_move_one_space(struct lcd_display display, bool direction);
+char lcd_read_current_pos(struct lcd_display display);
 
 char lcd_set_pins(struct lcd_display display, char rs, char rw, char pin_state)
 // set the pins for the LCD Display
@@ -54,7 +55,7 @@ char lcd_set_pins(struct lcd_display display, char rs, char rw, char pin_state)
 			if (bit_idx < 4)
 				gpio_put(display.db_pins[bit_idx],  pin_state & (0x80 >> bit_idx));
 			else {
-				if (bit_idx == 4) {
+				if ((bit_idx == 4) && (rw == 0)) {
 					sleep_us(1);
 					gpio_put(display.e_pin,1);
 					sleep_us(1);
@@ -76,21 +77,50 @@ char lcd_set_pins(struct lcd_display display, char rs, char rw, char pin_state)
 	sleep_us(1);
 	gpio_put(display.e_pin,1);
 	
-		
-		if ((rw == 1) && (display.rw_pin <= 30)) {
+	if ((rw == 1) && (display.rw_pin <= 30)) {
+		//read the value at the current position in 4-bit mode then 8-bit mode
+		if ((display.db_pins[4] > 30) || (display.db_pins[5] > 30) || (display.db_pins[6] > 30) || (display.db_pins[7] > 30))
+		{
+			//set the first 4 bits
+			for (int i=0; i<4; i++){
+				gpio_set_dir(display.db_pins[i], GPIO_IN);
+			}
 
-			for (i=0; i<8; i++){
+			for (int i = 0; i < 4; i++){
+				ddram_data = ddram_data | ((gpio_get(display.db_pins[i])<<(7-i)));
+			}
+			
+			sleep_us(1);
+			gpio_put(display.e_pin,0);
+			sleep_us(1);
+			gpio_put(display.e_pin,1);
+			sleep_us(1);
+			
+			for (int i = 0; i < 4; i++){
+				ddram_data = ddram_data | ((gpio_get(display.db_pins[i])<<(3-i)));
+			}
+			
+			for (int i=0; i<4; i++){
+				gpio_set_dir(display.db_pins[i], GPIO_OUT);
+			}
+
+		} else {	
+			// 8 bit mode for reading data from current position
+
+			for (int i=0; i<8; i++){
 				gpio_set_dir(display.db_pins[i], GPIO_IN);
 			}
 			
-			for (i=0; i<8; i++){
-				ddram_data = ddram_data | ((gpio_get(display.db_pins[i])<<i));
+			for (int i=0; i<8; i++){
+				ddram_data = ddram_data | ((gpio_get(display.db_pins[i])<<(7-i)));
 			}
 			
-			for (i=0; i<8; i++){
+			for (int i=0; i<8; i++){
 				gpio_set_dir(display.db_pins[i], GPIO_OUT);
 			}
+			
 		}
+	}
 
 	sleep_us(1);
 	gpio_put(display.e_pin,0);
@@ -316,5 +346,7 @@ void lcd_move_one_space(struct lcd_display display, bool direction)
 char lcd_read_current_pos(struct lcd_display display)
 /* Read the character at the current location */
 {
-	lcd_set_pins(display, 1, 1, 0x00);
+	char ddram_data;
+	ddram_data = lcd_set_pins(display, 1, 1, 0x00);
+	return ddram_data;
 }

@@ -25,17 +25,20 @@ The lcd_display struct holds the number of the GPIO pin that is connected to eac
 <h3>Functions available:</h3>
     
 <h4>Intended for use outside of header:</h4>
-    
-        void lcd_init_pins(struct lcd_display display);
-        void lcd_init_display(struct lcd_display display);
-        void lcd_display_msg(struct lcd_display display, char *message);
-        void lcd_jump_to_line_2(struct lcd_display display);
-        void lcd_jump_to_pos(struct lcd_display display, uint pos);
-        void lcd_set_cursor(struct lcd_display display, bool cursor);
+
+	void lcd_init_display(struct lcd_display display);
+	void lcd_init_pins(struct lcd_display display);
+	void lcd_display_msg(struct lcd_display display, char *message);
+	void lcd_jump_to_line_2(struct lcd_display display);
+	void lcd_jump_to_pos(struct lcd_display display, uint pos);
+	void lcd_set_cursor(struct lcd_display display, bool cursor);
+	void lcd_delete_char(struct lcd_display display);
+	void lcd_move_one_space(struct lcd_display display, bool direction);
+	char lcd_read_current_pos(struct lcd_display display);
 
 <h4>Intended for use internally by the header:</h4>
     
-	void lcd_set_pins(struct lcd_display display, uint rs, uint rw, char pin_state);
+	char lcd_set_pins(struct lcd_display display, uint rs, uint rw, char pin_state);
 	void lcd_set_pins_4_only(struct lcd_display display, char rs, char rw, char pin_state);
 	void lcd_wait_for_busy_flag(struct lcd_display display);
 

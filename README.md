@@ -35,6 +35,7 @@ The lcd_display struct holds the number of the GPIO pin that is connected to eac
 	void lcd_delete_char(struct lcd_display display);
 	void lcd_move_one_space(struct lcd_display display, bool direction);
 	char lcd_read_current_pos(struct lcd_display display);
+	void lcd_read_all_ddram(struct lcd_display display, char* ddram_contents);
 
 <h4>Intended for use internally by the header:</h4>
     

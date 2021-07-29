@@ -347,20 +347,31 @@ void lcd_move_one_space(struct lcd_display display, bool direction)
 char lcd_read_current_pos(struct lcd_display display)
 /* Read the character at the current location */
 {
-	char ddram_data;
-	ddram_data = lcd_set_pins(display, 1, 1, 0x00);
-	return ddram_data;
+	if (display.rw_pin <= 30){
+		char ddram_data;
+		ddram_data = lcd_set_pins(display, 1, 1, 0x00);
+		return ddram_data;
+	} else {
+		return 0;
+	}
 }
 
  void lcd_read_all_ddram(struct lcd_display display, char* ddram_contents)
 /* Read all of the data in the ddram */
 {
-	char contents[80];
+	if (display.rw_pin <= 30){
+		char contents[80];
+		char address_counter;
 
-	for (int i=0; i<80; i++){
-		lcd_jump_to_pos(display, i);
-		contents[i] = lcd_read_current_pos(display);
+		//before starting check the current cursor position to return to later
+		address_counter = lcd_set_pins(display, 0, 1, 0x00);
+
+		for (int i=0; i<80; i++){
+			lcd_jump_to_pos(display, i);
+			contents[i] = lcd_read_current_pos(display);
+		}
+		strncpy(ddram_contents, contents, 80);
+		ddram_contents[80] = '\0';
+		lcd_jump_to_pos(display, (uint)address_counter);
 	}
-	strncpy(ddram_contents, contents, 80);
-	ddram_contents[80] = '\0';
 }

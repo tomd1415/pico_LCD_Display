@@ -22,6 +22,7 @@ void lcd_display_msg(struct lcd_display display, char *message);
 void lcd_jump_to_line_2(struct lcd_display display);
 void lcd_jump_to_pos(struct lcd_display display, uint pos);
 void lcd_set_cursor(struct lcd_display display, bool cursor);
+void lcd_read_all_ddram(struct lcd_display display, char* ddram_contents);
 
 void lcd_delete_char(struct lcd_display display);
 void lcd_move_one_space(struct lcd_display display, bool direction);
@@ -349,4 +350,17 @@ char lcd_read_current_pos(struct lcd_display display)
 	char ddram_data;
 	ddram_data = lcd_set_pins(display, 1, 1, 0x00);
 	return ddram_data;
+}
+
+ void lcd_read_all_ddram(struct lcd_display display, char* ddram_contents)
+/* Read all of the data in the ddram */
+{
+	char contents[80];
+
+	for (int i=0; i<80; i++){
+		lcd_jump_to_pos(display, i);
+		contents[i] = lcd_read_current_pos(display);
+	}
+	strncpy(ddram_contents, contents, 80);
+	ddram_contents[80] = '\0';
 }

@@ -28,6 +28,8 @@ void lcd_delete_char(struct lcd_display display);
 void lcd_move_one_space(struct lcd_display display, bool direction);
 char lcd_read_current_pos(struct lcd_display display);
 
+char lcd_return_current_address(struct lcd_display display);
+
 char lcd_set_pins(struct lcd_display display, char rs, char rw, char pin_state)
 // set the pins for the LCD Display
 // char pin_state is a byte to hold the D7 to D0 pins
@@ -350,6 +352,7 @@ char lcd_read_current_pos(struct lcd_display display)
 	if (display.rw_pin <= 30){
 		char ddram_data;
 		ddram_data = lcd_set_pins(display, 1, 1, 0x00);
+		lcd_move_one_space(display, false);
 		return ddram_data;
 	} else {
 		return 0;
@@ -374,4 +377,70 @@ char lcd_read_current_pos(struct lcd_display display)
 		ddram_contents[80] = '\0';
 		lcd_jump_to_pos(display, (uint)address_counter);
 	}
+}
+
+char lcd_return_current_address(struct lcd_display display) 
+{
+	//get the current state of the pins to return to once busy flag if off
+	char start_state_DB[8];
+	bool start_state_RS;
+	bool start_state_RW;
+	uint num_bits = 8;
+
+	if ((display.db_pins[4] > 30) || (display.db_pins[5] > 30) || (display.db_pins[6] > 30) || (display.db_pins[7] > 30)) {
+		num_bits = 4;
+	}
+
+	start_state_RS = gpio_get(display.rs_pin);
+	start_state_RW = gpio_get(display.rw_pin);
+
+	for (int i = 0; i < num_bits; i++){
+		start_state_DB[i] = gpio_get(display.db_pins[i]);
+	}
+
+	//start checking the busy flag
+	uint busy = 1;
+	char current_address = 0x00;
+	
+	gpio_put(display.e_pin, 0);
+	gpio_put(display.rs_pin, 0);
+	gpio_put(display.rw_pin, 1);
+	
+	for (int i = 0; i < num_bits; i++){
+		gpio_set_dir(display.db_pins[i], GPIO_IN);
+	}
+	sleep_us(1);
+	gpio_put(display.e_pin, 1);
+	sleep_us(1);
+	busy = gpio_get(display.db_pins[0]);
+	
+	for (int i = 1; i < num_bits; i++){
+		if (gpio_get(display.db_pins[i]) == 1) {
+			current_address = (current_address | 0x80 >> i);
+ 		}	
+	}
+
+	sleep_us(1);
+	gpio_put(display.e_pin, 0);
+	if (num_bits == 4) {
+		sleep_us(1);
+		gpio_put(display.e_pin, 1);
+		sleep_us(1);
+		gpio_put(display.e_pin, 0);
+		sleep_us(1);
+		}
+	// Set DB pins back to output
+	gpio_set_dir(display.db_pins[0], GPIO_OUT);
+
+	// Reset the pins to their orgional state
+	gpio_put(display.rw_pin, start_state_RW);
+	gpio_put(display.rs_pin, start_state_RS);
+	for (int i = 0; i < num_bits; i++){
+		gpio_put(display.db_pins[i], start_state_DB[i]);
+	}
+
+	for (int i = 0; i < num_bits; i++){
+		gpio_set_dir(display.db_pins[i], GPIO_OUT);
+	}
+	return current_address;
 }

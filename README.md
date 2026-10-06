@@ -5,12 +5,12 @@ This will be a header file that can be used to run the HD44780U (LCD-II) based L
 
 The lcd_display struct holds the number of the GPIO pin that is connected to each of the LCD Display's pins.
 
-<b>NOTE:</b> <ul><li>If RW is set to 'n' the functions will operate without checking the 'busy flag'. All read functions will be disabled.</li><li>If any data pin in array position 4 - 7 (DB0 - DB3) is set to 'n' the functions will operate in '4-bit mode'.</li><ul>
+<b>NOTE:</b> <ul><li>If RW is set to 'n' the functions will operate without checking the 'busy flag'. All read functions will be disabled.</li><li>If any data pin in array position 4 - 7 (DB0 - DB3) is set to 'n' the functions will operate in '4-bit mode'.</li></ul>
 
 <h3>LCD pin numbers assumed:</h3>
     <b>1</b> - GND : Tied to ground -- not included in lcd_display struct.<br />
     <b>2</b> - VDD : Tied to 5v -- not included in lcd_display struct.<br />
-    <b>3</b> - VO  : for brigtness control -- not included in lcd_display.<br />
+    <b>3</b> - VO  : for contrast control -- not included in lcd_display.<br />
     <b>4</b> - RS  : Register Select -- Required - type: char -- supply GPIO pin number that is connected to RS pin on LCD Display.<br />
     <b>5</b> - RW  : Read/Write Select -- Required - type: char -- supply GPIO pin number that is connected to the RW pin on the LCD Display. <i>Set to 'n' if the pin is not connected to the pico.</i><br />
     <b>6</b> - E   : Enable Pin -- Required - type char -- supply GPIO pin number that is connected to E pin on the LCD Display.<br />
@@ -36,10 +36,11 @@ The lcd_display struct holds the number of the GPIO pin that is connected to eac
 	void lcd_move_one_space(struct lcd_display display, bool direction);
 	char lcd_read_current_pos(struct lcd_display display);
 	void lcd_read_all_ddram(struct lcd_display display, char* ddram_contents);
+	char lcd_return_current_address(struct lcd_display display);
 
 <h4>Intended for use internally by the header:</h4>
     
-	char lcd_set_pins(struct lcd_display display, uint rs, uint rw, char pin_state);
+	char lcd_set_pins(struct lcd_display display, char rs, char rw, char pin_state);
 	void lcd_set_pins_4_only(struct lcd_display display, char rs, char rw, char pin_state);
 	void lcd_wait_for_busy_flag(struct lcd_display display);
 

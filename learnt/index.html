@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What I have learnt: Driving an HD44780 LCD from the Pico in C</title>
+<link rel="stylesheet" href="learnt.css">
+<style>
+  /* page-only additions; the shared learnt.css stays identical across projects */
+  main th, main td { overflow-wrap: anywhere; }
+</style>
+</head>
+<body>
+<header class="site">
+  <div class="inner">
+    <p class="meta"><a href="../../index.html">What I have learnt</a> · project: <code>pico_LCD_Display</code> · a single C header for driving an HD44780-based character LCD from the original Raspberry Pi Pico (Pico SDK), July 2021</p>
+    <h1>Driving an HD44780 LCD from the Pico in C</h1>
+    <p class="meta">Reconstructed on 2026-10-06 from the repository record (git history 2021-07-14–2021-08-02, <code>README.md</code>, <code>h_files/pico_LCD_display.h</code>, <code>LCDTest.c</code>, and the copies of the header used in <code>eater/network/</code>), not written at the time · finished as far as it went: 8-bit and 4-bit modes, with or without the RW pin, plus reading back from the display; untouched since August 2021 · for revisiting later, not for reference while working (that is <code>README.md</code>)</p>
+  </div>
+</header>
+
+<main>
+<nav class="toc" aria-label="Contents">
+  <strong>Contents</strong>
+  <ol>
+    <li><a href="#big-picture">The big picture</a></li>
+    <li><a href="#interface">How the display is driven</a></li>
+    <li><a href="#init">Initialisation, in 8-bit and 4-bit mode</a></li>
+    <li><a href="#busy">Waiting: the busy flag or a fixed delay</a></li>
+    <li><a href="#reading">Reading back from the display</a></li>
+    <li><a href="#traps">Traps the fixes recorded</a></li>
+    <li><a href="#lessons">General lessons</a></li>
+    <li><a href="#results">Results</a></li>
+    <li><a href="#test">Test yourself</a></li>
+    <li><a href="#next">Open questions found on review</a></li>
+    <li><a href="#glossary">Glossary</a></li>
+  </ol>
+</nav>
+
+<h2 id="big-picture">1. The big picture</h2>
+<p>My first attempt to drive a 16-pin HD44780 character LCD from the Raspberry Pi Pico in C: one header file, <code>pico_LCD_display.h</code>, that takes a struct of GPIO numbers and works in 8-bit or 4-bit mode, with or without the read/write pin connected. It was written over three weeks in July 2021, and the same header was copied into my Pico networking experiments in the <a href="../../eater/learnt/index.html"><code>eater</code></a> repo, which used the LCD to show each bit as it was sent and received.</p>
+<p>The history has two bursts. On 14–15 July the header went from a first upload, to a struct-based API, to supporting a display with RW wired to ground, to 4-bit mode, with a README describing all of it. On 28 July to 2 August it learned to read from the display: the character at the cursor, the whole display memory, and the cursor address. Several commit messages end "-- tested" or "-- not tested", which makes it possible to see which steps were checked on the hardware.</p>
+
+<h2 id="interface">2. How the display is driven</h2>
+<p>An HD44780 module has 16 pins. Three are control lines, eight are data lines (DB0–DB7), and the rest are power, contrast and backlight. The control lines are:</p>
+<ul>
+  <li><strong>RS</strong> (register select): 0 means the byte on the data lines is an <em>instruction</em> (clear, move the cursor, set a mode); 1 means it is <em>data</em>, a character to show.</li>
+  <li><strong>RW</strong> (read/write): 0 to write to the display, 1 to read from it.</li>
+  <li><strong>E</strong> (enable): the strobe. The display acts on what is on RS, RW and the data lines when E falls from high to low.</li>
+</ul>
+<p>So every operation in the header has the same shape, in <code>lcd_set_pins()</code>: set RS and RW, put the byte on the data pins, raise E, wait a microsecond, lower E. Writing "Hello" is five data writes with RS = 1; jumping to a position is one instruction write of <code>0x80 + address</code> with RS = 0.</p>
+<p>The pins are described by a struct, so the caller only has to list GPIO numbers: <code>{RS, RW, E, {DB7, DB6, DB5, DB4, DB3, DB2, DB1, DB0}}</code>. The data array is ordered from DB7 down to DB0, which matters when bits are read back (section 6). An unconnected pin is marked with a sentinel: any value over 30 counts as "not connected", and the README suggests <code>'n'</code>, which is 110 as a number. The RP2040 only has GPIOs 0 to 29, so no real pin can be mistaken for it.</p>
+<div class="card fact"><span class="label">Verified in the code</span>
+<code>if (display.rw_pin &lt;= 30)</code> decides whether the busy flag can be read, and if any of <code>db_pins[4]</code> to <code>db_pins[7]</code> (DB3–DB0) is over 30, every function switches to 4-bit mode (<code>h_files/pico_LCD_display.h</code>).</div>
+
+<h2 id="init">3. Initialisation, in 8-bit and 4-bit mode</h2>
+<p>The display does not know how it is wired, so the header has to tell it, and the datasheet gives a fixed recipe for doing so (the comments cite pages 45 and 46 of the HD44780 datasheet). The 8-bit recipe in <code>lcd_init_display()</code>: wait 45 ms after power-up, send the function-set instruction <code>0x30</code> three times with pauses of 5 ms and 120 µs, then <code>0x38</code> (8-bit, two lines, 5×8 font). Then display on with cursor (<code>0x0e</code>), entry mode "increment, don't shift" (<code>0x06</code>), and clear (<code>0x01</code>).</p>
+<p>4-bit mode uses only DB7–DB4, and each byte goes as two halves (nibbles), high nibble first, each with its own E pulse. The awkward part is the start. At power-up the display is in 8-bit mode and expects a whole byte on every E pulse, with only four data wires connected. So the first instructions are sent as <strong>single nibbles</strong> with one E pulse each: <code>0x3</code> three times, to force a known state, then <code>0x2</code>, which switches it into 4-bit mode. Only after that can full bytes be sent as nibble pairs, starting with <code>0x2</code>,<code>0x8</code> (function set: 4-bit, two lines). That is why the header has a separate <code>lcd_set_pins_4_only()</code> that sends one nibble and one E pulse, used only during initialisation.</p>
+<div class="card idea"><span class="label">Lesson</span>
+A device that can be wired more than one way has to be told how before it can be talked to normally. The "send 0x3 three times" sequence works whatever state the display was left in, including halfway through a byte in 4-bit mode, which is why datasheets ask for it.</div>
+
+<h2 id="busy">4. Waiting: the busy flag or a fixed delay</h2>
+<p>Each instruction takes the display some time (most about 40 µs, clear and home much longer). Send the next one too soon and it is lost. There are two ways to wait:</p>
+<ul>
+  <li><strong>Ask the display.</strong> With RW connected, read the instruction register (RS = 0, RW = 1): DB7 is the <em>busy flag</em>. <code>lcd_wait_for_busy_flag()</code> switches the DB7 pin to input and pulses E until it reads 0. In 4-bit mode each read is two nibbles, so it pulses E a second time to complete the read, even though only the first nibble holds the flag.</li>
+  <li><strong>Wait long enough.</strong> Many modules have RW wired straight to ground to save a pin, so they can never be read. Commit <code>7862e7f</code> added that case: before each write the header sleeps 50 µs ("37 recomended by datasheet", says the comment), and after a clear it sleeps 2 ms.</li>
+</ul>
+<p>Two practical details sit underneath this. The Pico's pins are 3.3 V, while the README wires the module's VDD to 5 V; reading from a 5 V module drives the Pico's pins from the display, which the repo does not discuss (see section 10). And the busy-flag routine saves and restores the state of the RS, RW and data pins around its reads, so it can be called from the middle of a write.</p>
+
+<h2 id="reading">5. Reading back from the display</h2>
+<p>The second burst added reads. A data read (RS = 1, RW = 1) returns the character at the display's current address, from its <strong>DDRAM</strong> (display data RAM). The pins have to be switched to inputs before raising E and back to outputs afterwards, and in 4-bit mode the byte arrives as two nibbles from two E pulses.</p>
+<p>A read, like a write, moves the address counter on by one. So the final version of <code>lcd_read_current_pos()</code> (<code>ffe1e0a</code>) moves the cursor back one place after reading, to leave it where it was. <code>lcd_read_all_ddram()</code> first reads the current address (an instruction read returns the address counter in its low seven bits), then reads positions 0 to 79 one by one, and finally jumps back to the saved address (<code>2ce12a6</code>, "returns the cursor to origional position").</p>
+
+<h2 id="traps">6. Traps the fixes recorded</h2>
+<div class="card trap"><span class="label">Trap: shifting the display instead of the cursor</span>
+The first <code>lcd_move_one_space()</code> sent <code>0x18</code> and <code>0x1c</code>. In the HD44780's "cursor or display shift" instruction (<code>0001 S/C R/L 00</code>), bit 3 chooses what moves: set, it shifts the whole display; clear, it moves only the cursor. The commit that was marked "-- tested" (<code>63ca12e</code>) changed them to <code>0x14</code> (cursor right) and <code>0x10</code> (cursor left), the only change between "delete character -- not tested" and "-- tested".</div>
+<div class="card trap"><span class="label">Trap: bits read back in the wrong order</span>
+The untested read (<code>d835d10</code>) assembled the byte with <code>gpio_get(db_pins[i]) &lt;&lt; i</code>. But the pin array runs from DB7 to DB0, so element 0 is the most significant bit and needs shifting by 7, not 0. The tested version (<code>d66d870</code>) uses <code>&lt;&lt; (7-i)</code> in 8-bit mode, and <code>7-i</code> then <code>3-i</code> for the two nibbles in 4-bit mode.</div>
+<div class="card trap"><span class="label">Trap: a write's middle pulse spoils a read</span>
+In 4-bit mode a write pulses E between the two nibbles. The read path does its own two pulses, so the same commit (<code>d66d870</code>) limited the write's middle pulse to writes: <code>if ((bit_idx == 4) &amp;&amp; (rw == 0))</code>. An extra pulse during a read would consume one nibble of the reply.</div>
+<div class="card fact"><span class="label">Verified by the commit record</span>
+The steps marked "-- tested" on the hardware: 4-bit read at the cursor (<code>d66d870</code>), reading the whole DDRAM (<code>3a1e30d</code>), and delete character (<code>63ca12e</code>). Marked "-- not tested": the first read code (<code>d835d10</code>) and the first delete (<code>e52460d</code>). The last two commits (<code>2ce12a6</code>, <code>ffe1e0a</code>) carry no mark.</div>
+
+<h2 id="lessons">7. General lessons</h2>
+<div class="card idea"><span class="label">Say in the commit whether it ran</span>
+Labelling commits "-- tested" or "-- not tested" cost nothing and is the only reason this page can say which code was proven on hardware. The two traps above are visible exactly because an untested commit was followed by a tested one.</div>
+<div class="card idea"><span class="label">Fall back gracefully on missing wires</span>
+Treating a missing RW pin or missing DB0–DB3 as configuration rather than a different library meant one header covered four wirings, and each function only had to ask "is this pin connected?".</div>
+<div class="card idea"><span class="label">Array order is a contract</span>
+Listing pins from DB7 to DB0 is natural for writing (send the top bit first) but means every read has to shift by <code>7-i</code>. Whichever order is chosen, both directions must agree on it.</div>
+
+<h2 id="results">8. Results</h2>
+<table>
+  <tr><th>Capability</th><th>Commit</th><th>Status in the record</th></tr>
+  <tr><td>8-bit write, busy flag, struct API</td><td><code>49ee3d8</code>–<code>b3207a7</code>, 14 July</td><td>used by <code>LCDTest.c</code> and the eater network programs</td></tr>
+  <tr><td>RW tied to ground (fixed delays)</td><td><code>7862e7f</code>, 15 July</td><td>no test mark</td></tr>
+  <tr><td>4-bit mode</td><td><code>cc6d20e</code>, <code>bb7e323</code>, 15 July</td><td>no test mark</td></tr>
+  <tr><td>Delete character</td><td><code>63ca12e</code>, 28 July</td><td>"-- tested"</td></tr>
+  <tr class="hl"><td>Read at cursor, 8- and 4-bit</td><td><code>d66d870</code>, 29 July</td><td>"-- tested"</td></tr>
+  <tr><td>Read all DDRAM</td><td><code>3a1e30d</code>, 29 July</td><td>"-- tested"</td></tr>
+  <tr><td>Return cursor address</td><td><code>ffe1e0a</code>, 2 August</td><td>no test mark</td></tr>
+</table>
+
+<h2 id="test">9. Test yourself</h2>
+<details><summary>What do RS, RW and E each do?</summary>
+RS chooses instruction (0) or data (1); RW chooses write (0) or read (1); E is the strobe: the display takes in the data lines when E goes from high to low.</details>
+<details><summary>Why does 4-bit initialisation need a function that sends a single nibble with a single E pulse?</summary>
+At power-up the display is in 8-bit mode and takes a whole byte per E pulse, but only DB7–DB4 are wired. So the first instructions (0x3 three times, then 0x2 to select 4-bit mode) must each be one nibble on one pulse. Only then are full bytes sent as two nibbles.</details>
+<details><summary>How does the header know a display has its RW pin tied to ground, and what changes?</summary>
+The struct's RW pin is set to a value over 30 (the README suggests <code>'n'</code>, 110). The busy flag can then never be read, so each write waits a fixed 50 µs instead, clear waits 2 ms, and the read functions do nothing.</details>
+<details><summary>Why was <code>0x18</code> wrong for "move the cursor one place"?</summary>
+In the shift instruction, bit 3 (S/C) set means shift the whole display. Moving only the cursor needs it clear: <code>0x14</code> for right, <code>0x10</code> for left.</details>
+<details><summary>Reading the pins in the order the struct lists them (DB7 first), what shift does element <code>i</code> need?</summary>
+<code>7 - i</code>: element 0 is DB7, the most significant bit. Shifting by <code>i</code> reverses the byte.</details>
+<details><summary>Why does <code>lcd_read_current_pos()</code> move the cursor left after reading?</summary>
+Reading DDRAM moves the address counter on by one, just as writing does. Moving back leaves the cursor where it was before the read.</details>
+<details><summary>What does reading with RS = 0 and RW = 1 return?</summary>
+The busy flag in bit 7 and the current address counter in bits 6–0. The header uses it both to wait for the display and to save the cursor position.</details>
+
+<h2 id="next">10. Open questions found on review</h2>
+<p>These were noticed while reconstructing this page on 2026-10-06. None was recorded as a problem at the time, and none has been tested.</p>
+<ul>
+  <li><strong>Where does line 2 start?</strong> <code>lcd_jump_to_line_2()</code> jumps to address 40 (decimal, <code>0x28</code>). The eater programs written that same month jump to <code>0x40 + n</code> for the second line, and in two-line mode the HD44780 maps line 2 to <code>0x40</code>–<code>0x67</code>. Likewise <code>lcd_read_all_ddram()</code> reads addresses 0–79 as if they were continuous. Try both on the real display.</li>
+  <li><strong>Reading back from a 5 V display.</strong> When RW = 1, the display drives the data lines. If the module runs at 5 V (as the README's pin list says), that is 5 V into the Pico's 3.3 V inputs. Measure a data line during a read before relying on it.</li>
+  <li><strong><code>lcd_return_current_address()</code></strong> does not check whether RW is connected (it writes to the "pin" <code>'n'</code> if not), and in 4-bit mode it only reads the first nibble, so the low four address bits are lost.</li>
+  <li><strong>Buffer size.</strong> <code>lcd_read_all_ddram()</code> writes 80 characters and a terminating zero, so the caller's buffer must hold 81 bytes; the README does not say so.</li>
+  <li><strong>Building it.</strong> The repo has no <code>CMakeLists.txt</code>; <code>LCDTest.c</code> needs the Pico SDK and a build file like the ones in <code>eater/network/</code>.</li>
+</ul>
+
+<h2 id="glossary">11. Glossary</h2>
+<dl class="glossary">
+  <dt>HD44780</dt><dd>Hitachi's character-LCD controller, copied by most 16×2 and 20×4 text displays. It has an 8-bit or 4-bit parallel interface.</dd>
+  <dt>RS, RW, E</dt><dd>The HD44780's register-select, read/write and enable (strobe) lines.</dd>
+  <dt>Nibble</dt><dd>Half a byte, four bits. In 4-bit mode each byte is sent as the high nibble then the low nibble.</dd>
+  <dt>DDRAM</dt><dd>Display data RAM: the HD44780's memory of the characters on screen, addressed with the "set DDRAM address" instruction (<code>0x80 + address</code>).</dd>
+  <dt>Address counter</dt><dd>The HD44780's pointer into DDRAM. It moves on by one after every data read or write.</dd>
+  <dt>Busy flag</dt><dd>Bit 7 of an instruction read: 1 while the display is still executing the last instruction.</dd>
+  <dt>Sentinel value</dt><dd>A value that cannot be real data, used to mean "not present"; here any pin number over 30.</dd>
+  <dt>Pico SDK</dt><dd>Raspberry Pi's C/C++ software development kit for the RP2040 (<code>gpio_init</code>, <code>gpio_put</code>, <code>sleep_us</code>, CMake build).</dd>
+</dl>
+</main>
+<footer><div class="inner">Part of the "what I have learnt" collection, one page per project, all sharing <code>learnt.css</code>. Reconstructed 2026-10-06 from the git history of <code>pico_LCD_Display</code> and the copies of its header in <code>eater/network/</code>.</div></footer>
+</body>
+</html>
